@@ -1,0 +1,36 @@
+serviceAccount: projects/project-2-458822/serviceAccounts/hemanth-861@project-2-458822.iam.gserviceaccount.com
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # Step 1: Build Docker image from my_app directory (must contain Dockerfile)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/staging-image', '.' ]
+    dir: 'infra/my_app'
+
+  # Step 2: Push Docker image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [ 'push', 'gcr.io/$PROJECT_ID/staging-image' ]
+
+  # Step 3: Initialize Terraform (infra/envs/staging contains your TF config)
+  - name: 'hashicorp/terraform:light'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        cd infra/envs/staging
+        terraform init
+
+  # Step 4: Apply Terraform to deploy or update Cloud Run service
+  - name: 'hashicorp/terraform:light'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        cd infra/envs/staging
+        terraform apply -auto-approve
+
+images:
+  # Register the built image as an output artifact of the build
+  - 'gcr.io/$PROJECT_ID/staging-image'
