@@ -1,130 +1,47 @@
-serviceAccount: projects/project-2-458822/serviceAccounts/hemanth-861@project-2-458822.iam.gserviceaccount.com
-
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 steps:
- # Step 1: Install Python dependencies and tools
   - name: 'python:3.10'
-    id: Install Dependencies
+    id: Install & Test
     entrypoint: bash
-    args:
-      - -c
-      - |
-        pip install -r requirements.txt
-        pip install pytest flake8
+    args: ['-c', 'pip install -r requirements.txt && pytest && flake8 app.py']
 
-  # Step 2: Run tests
-  - name: 'python:3.10'
-    id: Run Tests
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        pytest
-
-  # Step 3: Run linting
-  - name: 'python:3.10'
-    id: Lint Code
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        flake8 app.py
-  # Step 4: Build Docker image from my_app directory (must contain Dockerfile)
   - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/prod-image', '.' ]
-    dir: 'infra/my_app'
+    id: Build Image
+    args:
+      - build
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
+      - .
 
-  # Step 5: Push Docker image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: [ 'push', 'gcr.io/$PROJECT_ID/prod-image' ]
-
-  # Step 6: Initialize Terraform (infra/envs/staging contains your TF config)
-  - name: 'hashicorp/terraform:light'
-    entrypoint: 'sh'
+    id: Push Image
     args:
-      - '-c'
-      - |
-        cd infra/envs/prod
-        terraform init
+      - push
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
 
-  # Step 4: Apply Terraform to deploy or update Cloud Run service
-  - name: 'hashicorp/terraform:light'
-    entrypoint: 'sh'
-    args:
-      - '-c'
-      - |
-        cd infra/envs/prod
-        terraform apply -auto-approve
-        steps:
-  # Step 1: Install Python dependencies and tools
-  - name: 'python:3.10'
-    id: Install Dependencies
+  - name: 'hashicorp/terraform:1.7.5'
+    id: Terraform Apply for all envs
     entrypoint: bash
+    dir: terraform
     args:
       - -c
       - |
-        pip install -r requirements.txt
-        pip install pytest flake8
+          terraform init
+          terraform apply -auto-approve -var="env=dev" -var="image_url=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA"
+          terraform apply -auto-approve -var="env=staging" -var="image_url=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA"
+          terraform apply -auto-approve -var="env=prod" -var="image_url=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA"
 
-  # Step 2: Run tests
-  - name: 'python:3.10'
-    id: Run Tests
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        pytest
-
-  # Step 3: Run linting
-  - name: 'python:3.10'
-    id: Lint Code
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        flake8 app.py
-
-  # Step 4: Build Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    id: Build Docker Image
-    args:
-      [
-        'build',
-        '-t',
-        'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA',
-        '.'
-      ]
-
-  # Step 5: Push Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    id: Push Docker Image
-    args:
-      [
-        'push',
-        'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
-      ]
-
-  # Step 9: Trigger Cloud Deploy
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: Trigger Cloud Deploy
+    id: Deploy via Cloud Deploy
     entrypoint: bash
     args:
       - -c
       - |
-        gcloud deploy releases create release-$BUILD_ID \
-          --delivery-pipeline=flask-pipeline \
-          --region=us-central1 \
-          --images=flask-app=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA
+          gcloud deploy releases create release-$BUILD_ID \
+            --delivery-pipeline=flask-pipeline \
+            --region=us-central1 \
+            --images=flask-app=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA
 
-# Push image to registry
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
 
 timeout: 1200s
-
-
-images:
-  # Register the built image as an output artifact of the build
-  - 'gcr.io/$PROJECT_ID/prod-image'
