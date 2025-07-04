@@ -1,10 +1,34 @@
-from flask import Flask
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
 
-app = Flask(__name__)
+resource "google_cloud_run_service" "dev" {
+  name     = "flask-dev"
+  location = var.region
 
-@app.route('/')
-def home():
-    return "Hello, World! from  my cloud run."
+  template {
+    spec {
+      containers {
+        image = var.image_url
+      }
+    }
+  }
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+  traffics {
+    percent         = 100
+    latest_revision = true
+  }
+}
+
+resource "google_cloud_deploy_target" "dev" {
+  name     = "dev"
+  location = var.region
+  target_id = "dev"
+
+  run {
+    location = google_cloud_run_service.dev.location
+    service  = google_cloud_run_service.dev.name
+  }
+}
+```
