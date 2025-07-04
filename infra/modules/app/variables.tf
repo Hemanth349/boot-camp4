@@ -1,4 +1,5 @@
-variable "name" {}
-variable "image" {}
-variable "region" {}
-variable "environment" {}
+variable "project_id" {}
+variable "region" {
+  default = "us-central1"
+}
+variable "image_url" {}
