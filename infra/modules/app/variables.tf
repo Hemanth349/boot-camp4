@@ -1,5 +1,16 @@
-variable "project_id" {}
+variable "project_id" {
+  type = string
+}
+
 variable "region" {
+  type    = string
   default = "us-central1"
 }
-variable "image_url" {}
+
+variable "env" {
+  type = string
+}
+
+variable "image_url" {
+  type = string
+}
