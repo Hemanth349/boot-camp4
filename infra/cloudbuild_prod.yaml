@@ -4,16 +4,43 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # Step 1: Build Docker image from my_app directory (must contain Dockerfile)
+ # Step 1: Install Python dependencies and tools
+  - name: 'python:3.10'
+    id: Install Dependencies
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -r requirements.txt
+        pip install pytest flake8
+
+  # Step 2: Run tests
+  - name: 'python:3.10'
+    id: Run Tests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pytest
+
+  # Step 3: Run linting
+  - name: 'python:3.10'
+    id: Lint Code
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        flake8 app.py
+  # Step 4: Build Docker image from my_app directory (must contain Dockerfile)
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/prod-image', '.' ]
     dir: 'infra/my_app'
 
-  # Step 2: Push Docker image to Google Container Registry
+  # Step 5: Push Docker image to Google Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: [ 'push', 'gcr.io/$PROJECT_ID/prod-image' ]
 
-  # Step 3: Initialize Terraform (infra/envs/staging contains your TF config)
+  # Step 6: Initialize Terraform (infra/envs/staging contains your TF config)
   - name: 'hashicorp/terraform:light'
     entrypoint: 'sh'
     args:
@@ -30,6 +57,73 @@ steps:
       - |
         cd infra/envs/prod
         terraform apply -auto-approve
+        steps:
+  # Step 1: Install Python dependencies and tools
+  - name: 'python:3.10'
+    id: Install Dependencies
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -r requirements.txt
+        pip install pytest flake8
+
+  # Step 2: Run tests
+  - name: 'python:3.10'
+    id: Run Tests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pytest
+
+  # Step 3: Run linting
+  - name: 'python:3.10'
+    id: Lint Code
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        flake8 app.py
+
+  # Step 4: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build Docker Image
+    args:
+      [
+        'build',
+        '-t',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA',
+        '.'
+      ]
+
+  # Step 5: Push Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push Docker Image
+    args:
+      [
+        'push',
+        'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
+      ]
+
+  # Step 9: Trigger Cloud Deploy
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: Trigger Cloud Deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud deploy releases create release-$BUILD_ID \
+          --delivery-pipeline=flask-pipeline \
+          --region=us-central1 \
+          --images=flask-app=us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA
+
+# Push image to registry
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/flask-repo/flask-image:$COMMIT_SHA'
+
+timeout: 1200s
+
 
 images:
   # Register the built image as an output artifact of the build
